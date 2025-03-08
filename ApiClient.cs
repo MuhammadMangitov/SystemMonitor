@@ -15,13 +15,42 @@ namespace SystemMonitor
             Timeout = TimeSpan.FromSeconds(10)
         };
 
-        private const string BaseUrl = "http://your-backend-url/api";
+        private const string BaseUrl = "http://13.51.199.15:4000/computers/create";
 
-        
         public static async Task<string> GetJwtTokenFromApi()
         {
-            // API dan JWT token olish (masalan, login orqali)
-            var response = await client.PostAsync("http://your-backend-url/api/authenticate", null);
+            var computerInfo = ComputerInfo.GetComputerInfo(); 
+            var jsonContent = JsonConvert.SerializeObject(computerInfo); 
+            var content = new StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json"); 
+
+            try
+            {
+                var response = await client.PostAsync(BaseUrl, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var token = await response.Content.ReadAsStringAsync();
+                    return token;
+                    Console.WriteLine("");
+
+                }
+                else
+                {
+                    Console.WriteLine($"JWT olishda xatolik: {response.StatusCode}");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"API ga so'rov yuborishda xatolik: {ex.Message}");
+                return null;
+            }
+        }
+
+        /*public static async Task<string> GetJwtTokenFromApi()
+        {
+
+            var response = await client.PostAsync("http://13.51.199.15:4000/computers/create/authenticate", null);
 
             if (response.IsSuccessStatusCode)
             {
@@ -31,9 +60,9 @@ namespace SystemMonitor
 
             Console.WriteLine("JWT token olishda xatolik");
             return null;
-        }
+        }*/
 
-        
+
         private static async Task<bool> SendData<T>(string url, T data)
         {
             try
@@ -45,7 +74,8 @@ namespace SystemMonitor
                 var token = await GetJwtTokenFromApi();
                 if (!string.IsNullOrEmpty(token))
                 {
-                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                    client.DefaultRequestHeaders.Authorization = new 
+                        System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
                 }
 
                 HttpResponseMessage response = await client.PostAsync(url, content);
@@ -74,12 +104,11 @@ namespace SystemMonitor
         }
 
             
-        public static async Task<bool> SendComputerInfo(ComputerInfoDetails info)
+       /* public static async Task<bool> SendComputerInfo(ComputerInfoDetails info)
         {
             return await SendData($"{BaseUrl}/computer-info", info);
-        }
+        }*/
 
-        
         public static async Task<bool> SendProgramInfo(List<ProgramDetails> programs)
         {
             return await SendData($"{BaseUrl}/program-info", programs);

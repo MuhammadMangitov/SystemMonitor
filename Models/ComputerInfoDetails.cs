@@ -1,4 +1,6 @@
-﻿namespace SystemMonitor.Models
+﻿using System.ComponentModel;
+
+namespace SystemMonitor.Models
 {
     public class ComputerInfoDetails
     {

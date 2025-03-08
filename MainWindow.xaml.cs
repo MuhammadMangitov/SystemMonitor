@@ -29,7 +29,7 @@ namespace SystemMonitor
 
             if (!string.IsNullOrEmpty(token))
             {
-                SQLiteHelper.DeleteOldJwtToken();
+                //SQLiteHelper.DeleteOldJwtToken();
 
                 SQLiteHelper.InsertJwtToken(token);
                 Console.WriteLine("JWT token saqlandi");
@@ -55,7 +55,8 @@ namespace SystemMonitor
         private async void SendComputerInfo()
         {
             var info = ComputerInfo.GetComputerInfo();
-            await ApiClient.SendComputerInfo(info);
+            SQLiteHelper.CreateConnection();
+            //await ApiClient.SendComputerInfo(info);
         }
 
         private async Task SendProgramInfo()

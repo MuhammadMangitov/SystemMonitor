@@ -8,7 +8,9 @@ namespace SystemMonitor
     {
         public static SQLiteConnection CreateConnection()
         {
-            var dbPath = ConfigurationManager.GetDbPath();
+            //var dbPath = ConfigurationManager.GetDbPath();
+
+            var dbPath = @"C:\Users\Muhammad\Desktop\c#_modul\github\SystemMonitor\SystemMonitor.db";
 
             if (!File.Exists(dbPath))
             {
@@ -23,6 +25,7 @@ namespace SystemMonitor
 
         public static void InsertJwtToken(string token)
         {
+            var created_at = DateTime.Now.ToString();
             using (var connection = CreateConnection())
             {
                 if (connection == null)
@@ -32,9 +35,10 @@ namespace SystemMonitor
 
                 try
                 {
-                    using (var command = new SQLiteCommand("INSERT INTO JwtToken (token) VALUES (@token)", connection))
+                    using (var command = new SQLiteCommand("INSERT INTO JwtToken (token, created_at) VALUES (@token, @created_at )", connection))
                     {
                         command.Parameters.AddWithValue("@token", token);
+                        command.Parameters.AddWithValue("@created_at", created_at);
                         command.ExecuteNonQuery();
                     }
                 }
