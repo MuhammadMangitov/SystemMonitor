@@ -16,7 +16,6 @@ namespace SystemMonitor
 
             Configuration = builder.Build();
         }
-        //aaa
         public static string GetDbPath()
         {
             return Configuration["DatabaseSettings:DbPath"];

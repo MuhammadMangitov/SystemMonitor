@@ -1,61 +1,80 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Management;
-using System.Diagnostics; // FileVersionInfo uchun
+using Microsoft.Win32;
 using SystemMonitor.Models;
 
 namespace SystemMonitor
 {
     public class ProgramManager
     {
-        public static List<ProgramDetails> GetRunningPrograms()
-        {
-            var programs = new List<ProgramDetails>();
-
-            try
+            public static List<ProgramDetails> GetInstalledPrograms()
             {
-                using (var searcher = new ManagementObjectSearcher("SELECT Name, ExecutablePath FROM Win32_Process"))
+                var programs = new List<ProgramDetails>();
+                string[] registryKeys = {
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+            };
+
+                foreach (var keyPath in registryKeys)
                 {
-                    foreach (ManagementObject obj in searcher.Get())
+                    using (var key = Registry.LocalMachine.OpenSubKey(keyPath))
                     {
-                        string name = obj["Name"]?.ToString();
-                        string path = obj["ExecutablePath"]?.ToString();
-
-                        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(path))
-                            continue;
-
-                        var details = new ProgramDetails
+                        if (key != null)
                         {
-                            name = name,
-                            executable_path = path
-                        };
+                            foreach (var subKeyName in key.GetSubKeyNames())
+                            {
+                                using (var subKey = key.OpenSubKey(subKeyName))
+                                {
+                                    string name = subKey?.GetValue("DisplayName")?.ToString();
+                                    string version = subKey?.GetValue("DisplayVersion")?.ToString() ;
+                                    string installLocation = subKey?.GetValue("InstallLocation")?.ToString() ;
+                                    string installDate = subKey?.GetValue("InstallDate")?.ToString();
+                                    bool isSystemComponent = Convert.ToBoolean(subKey?.GetValue("SystemComponent", 0));
 
-                        try
-                        {
-                            var fileInfo = new FileInfo(details.executable_path);
-                            details.file_size = fileInfo.Exists ? fileInfo.Length : (long?)null;
-                            details.creation_time = fileInfo.Exists ? fileInfo.CreationTime : (DateTime?)null;
+                                    var details = new ProgramDetails
+                                    {
+                                        name = name,
+                                        size = GetProgramSize(installLocation),
+                                        type = isSystemComponent ? "System" : "User",
+                                        installed_date = ParseInstallDate(installDate),
+                                        version = version
+                                    };
 
-                            // Versiyani olish
-                            var versionInfo = FileVersionInfo.GetVersionInfo(details.executable_path);
-                            details.version = versionInfo.FileVersion;
+                                    programs.Add(details);
+
+                                    return programs;
+                                }
+                            }
                         }
-                        catch (Exception fileEx)
-                        {
-                            Console.WriteLine($"[Xatolik] Fayl ma'lumotlarini olishda xatolik: {fileEx.Message}");
-                        }
-
-                        programs.Add(details);
                     }
                 }
+
+                return programs;
             }
-            catch (Exception ex)
+            private static DateTime? ParseInstallDate(string installDate)
             {
-                Console.WriteLine($"[Xatolik] Dasturlarni olishda xatolik: {ex.Message}");
+                if (DateTime.TryParseExact(installDate, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out DateTime date))
+                {
+                    return date;
+                }
+                return null;
             }
 
-            return programs;
+            private static int? GetProgramSize(string installLocation)
+            {
+                if (string.IsNullOrEmpty(installLocation) || !System.IO.Directory.Exists(installLocation))
+                    return null;
+
+                long size = 0;
+                var files = System.IO.Directory.GetFiles(installLocation, "*.*", System.IO.SearchOption.AllDirectories);
+                foreach (var file in files)
+                {
+                    var fileInfo = new System.IO.FileInfo(file);
+                    size += fileInfo.Length;
+                }
+
+                return (int?)(size / 1024 / 1024); 
+            }
         }
+
     }
-}
