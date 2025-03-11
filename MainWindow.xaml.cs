@@ -14,55 +14,63 @@ namespace SystemMonitor
         public MainWindow()
         {
             InitializeComponent();
-            WindowState = WindowState.Minimized; 
-            ShowInTaskbar = false; 
-            Visibility = Visibility.Hidden; 
+            WindowState = WindowState.Minimized;
+            ShowInTaskbar = false;
+            Visibility = Visibility.Hidden;
 
-            StartMonitoring();
-            socketManager = new SocketManager();
-            _ = socketManager.StartSocketListener();
-            _ = GetAndSaveJwtToken();
+            LogWrapper.Execute(() =>
+            {
+                StartMonitoring();
+                //socketManager = new SocketManager();
+                //_ = socketManager.StartSocketListener();
+                _ = GetAndSaveJwtToken();
+                
+            }, "UI");
         }
+
         public async Task GetAndSaveJwtToken()
         {
-            var token = await ApiClient.GetJwtTokenFromApi();
-
-            if (!string.IsNullOrEmpty(token))
+            await LogWrapper.ExecuteAsync(async () =>
             {
-                //SQLiteHelper.DeleteOldJwtToken();
-
-                SQLiteHelper.InsertJwtToken(token);
-                Console.WriteLine("JWT token saqlandi");
-            }
-            else
-            {
-                Console.WriteLine("JWT token olishda xatolik");
-            }
+                var token = await ApiClient.GetJwtTokenFromApi();
+                if (!string.IsNullOrEmpty(token))
+                {
+                    SQLiteHelper.InsertJwtToken(token);
+                    Console.WriteLine("JWT token saqlandi");
+                }
+                else
+                {
+                    Console.WriteLine("JWT token olishda xatolik");
+                }
+            }, "API");
         }
+
         private void StartMonitoring()
         {
-            
-            SendComputerInfo();
-
-            timer = new DispatcherTimer
+            LogWrapper.Execute(() =>
             {
-                Interval = TimeSpan.FromMinutes(10)
-            };
-            timer.Tick += async (s, e) => await SendProgramInfo();
-            timer.Start();
+                SendComputerInfo();
+                SendProgramInfo();
+
+            }, "Monitoring");
         }
 
-        private async void SendComputerInfo()
+        private void SendComputerInfo()
         {
-            var info = ComputerInfo.GetComputerInfo();
-            SQLiteHelper.CreateConnection();
-            //await ApiClient.SendComputerInfo(info);
+            LogWrapper.Execute(() =>
+            {
+                var info = ComputerInfo.GetComputerInfo();
+                SQLiteHelper.CreateConnection();
+            }, "Monitoring");
         }
 
-        private async Task SendProgramInfo()
+        private async void SendProgramInfo()
         {
-            var programs = ProgramManager.GetRunningPrograms();
-            await ApiClient.SendProgramInfo(programs);
+            await LogWrapper.ExecuteAsync(async () =>
+            {
+                var programs = ProgramManager.GetInstalledPrograms();
+                await ApiClient.SendProgramInfo(programs);
+            }, "Monitoring");
         }
     }
 }

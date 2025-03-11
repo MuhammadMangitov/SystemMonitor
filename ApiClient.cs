@@ -16,6 +16,7 @@ namespace SystemMonitor
         };
 
         private const string BaseUrl = "http://13.51.199.15:4000/computers/create";
+        private const string BaseUrlForApps = "http://13.51.199.15:4000/computers/applications";
 
         public static async Task<string> GetJwtTokenFromApi()
         {
@@ -31,7 +32,6 @@ namespace SystemMonitor
                 {
                     var token = await response.Content.ReadAsStringAsync();
                     return token;
-                    Console.WriteLine("");
 
                 }
                 else
@@ -70,19 +70,18 @@ namespace SystemMonitor
                 var json = JsonConvert.SerializeObject(data);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                // JWT tokenni olish va headerga qo'shish
-                var token = await GetJwtTokenFromApi();
+                var token = await SQLiteHelper.GetJwtToken();
                 if (!string.IsNullOrEmpty(token))
                 {
                     client.DefaultRequestHeaders.Authorization = new 
                         System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
                 }
 
-                HttpResponseMessage response = await client.PostAsync(url, content);
+                HttpResponseMessage response = await client.PutAsync(url, content);
 
                 if (response.IsSuccessStatusCode)
                 {
-                    return true; // So'rov muvaffaqiyatli bo'ldi
+                    return true; 
                 }
 
                 Console.WriteLine($"[Xatolik]: {response.StatusCode} - {response.ReasonPhrase}");
@@ -103,15 +102,11 @@ namespace SystemMonitor
             return false; // Agar xatolik bo'lsa false qaytariladi
         }
 
-            
-       /* public static async Task<bool> SendComputerInfo(ComputerInfoDetails info)
-        {
-            return await SendData($"{BaseUrl}/computer-info", info);
-        }*/
+           
 
         public static async Task<bool> SendProgramInfo(List<ProgramDetails> programs)
         {
-            return await SendData($"{BaseUrl}/program-info", programs);
+            return await SendData(BaseUrlForApps, programs);
         }
 
         

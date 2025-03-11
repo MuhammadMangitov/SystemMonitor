@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Data.SQLite;
 using System.IO;
+using System.Threading.Tasks;
+using System.Windows.Shapes;
 
 namespace SystemMonitor
 {
@@ -8,9 +10,7 @@ namespace SystemMonitor
     {
         public static SQLiteConnection CreateConnection()
         {
-            //var dbPath = ConfigurationManager.GetDbPath();
-
-            var dbPath = @"C:\Users\Muhammad\Desktop\c#_modul\github\SystemMonitor\SystemMonitor.db";
+            var dbPath = ConfigurationManager.GetDbPath();
 
             if (!File.Exists(dbPath))
             {
@@ -25,20 +25,18 @@ namespace SystemMonitor
 
         public static void InsertJwtToken(string token)
         {
-            var created_at = DateTime.Now.ToString();
             using (var connection = CreateConnection())
             {
                 if (connection == null)
                 {
                     return;
                 }
-
                 try
                 {
-                    using (var command = new SQLiteCommand("INSERT INTO JwtToken (token, created_at) VALUES (@token, @created_at )", connection))
-                    {
-                        command.Parameters.AddWithValue("@token", token);
-                        command.Parameters.AddWithValue("@created_at", created_at);
+                    using (var command = new SQLiteCommand(
+                            "UPDATE Configurations SET Jwt_token = @jwt_token WHERE id = 1", connection))
+                    { 
+                        command.Parameters.AddWithValue("@jwt_token", token);
                         command.ExecuteNonQuery();
                     }
                 }
@@ -70,7 +68,7 @@ namespace SystemMonitor
             }
         }
 
-        public static string GetJwtToken()
+        public static async Task<string> GetJwtToken()
         {
             string token = null;
 
@@ -83,13 +81,13 @@ namespace SystemMonitor
 
                 try
                 {
-                    using (var command = new SQLiteCommand("SELECT token FROM JwtToken ORDER BY created_at DESC LIMIT 1", connection))
+                    using (var command = new SQLiteCommand("SELECT Jwt_token FROM Configurations LIMIT 1", connection))
                     {
                         using (var reader = command.ExecuteReader())
                         {
                             if (reader.Read())
                             {
-                                token = reader["token"].ToString();
+                                token = reader["Jwt_token"].ToString();
                             }
                         }
                     }
@@ -103,7 +101,7 @@ namespace SystemMonitor
             return token;
         }
 
-        public static void LogMessage(string message)
+        /*public static void LogMessage(string message)
         {
             using (var connection = CreateConnection())
             {
@@ -114,16 +112,51 @@ namespace SystemMonitor
 
                 try
                 {
-                    using (var command = new SQLiteCommand("INSERT INTO LogEntry (message) VALUES (@message)", connection))
+                    using (var command1 = new SQLiteCommand("INSERT INTO LogEntry (message) VALUES (@message)", connection))
                     {
-                        command.Parameters.AddWithValue("@message", message);
-                        command.Parameters.AddWithValue("@timestamp", DateTime.Now);
-                        command.ExecuteNonQuery();
+                        command1.Parameters.AddWithValue("@message", message);
+                        command1.Parameters.AddWithValue("@timestamp", DateTime.Now);
+                        command1.ExecuteNonQuery();
                     }
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Xatolik: {ex.Message}");
+                }
+            }
+        }*/
+
+        public static void WriteLog(string module, string function, string message)
+        {
+            if (string.IsNullOrEmpty(module) || string.IsNullOrEmpty(function) || string.IsNullOrEmpty(message))
+            {
+                Console.WriteLine("Module, function yoki message bo‘sh bo‘lmasligi kerak");
+                return;
+            }
+
+            var createdDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"); 
+
+            using (var connection = CreateConnection())
+            {
+                if (connection == null)
+                {
+                    return;
+                }
+                try
+                {
+                    using (var command = new SQLiteCommand(@"INSERT INTO ""LogEntry"" (""module"", ""function"", ""created_date"", ""message"") 
+                          VALUES (@module, @function, @created_date, @message)", connection))
+                    {
+                        command.Parameters.AddWithValue("@module", module);
+                        command.Parameters.AddWithValue("@function", function);
+                        command.Parameters.AddWithValue("@created_date", createdDate);
+                        command.Parameters.AddWithValue("@message", message);
+                        command.ExecuteNonQuery();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Log yozishda xato: {ex.Message}");
                 }
             }
         }

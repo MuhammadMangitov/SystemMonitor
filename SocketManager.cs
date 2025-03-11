@@ -42,12 +42,12 @@ namespace SystemMonitor
 
                 if (!AllowedCommands.Contains(command.ToLower()))
                 {
-                    await ApiClient.SendCommandResult(command, null, "Permission denied");
+                    //await ApiClient.SendCommandResult(command, null, "Permission denied");
                     return;
                 }
 
                 var (result, error) = await ExecuteCommand(command);
-                await ApiClient.SendCommandResult(command, result, error);
+                //await ApiClient.SendCommandResult(command, result, error);
             });
 
             await client.ConnectAsync();

@@ -152,6 +152,7 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="ConfigurationManager.cs" />
+    <Compile Include="LogWrapper.cs" />
     <Compile Include="Models\ComputerInfoDetails.cs" />
     <Compile Include="Models\JwtResponse.cs" />
     <Compile Include="Models\LogEntry.cs" />
