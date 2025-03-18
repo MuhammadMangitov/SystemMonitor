@@ -44,9 +44,11 @@ namespace SystemMonitor
                 {
                     Console.WriteLine($"Xatolik: {ex.Message}");
                 }
+
+                //ClearLogs();
             }
         }
-
+        
         public static void DeleteOldJwtToken()
         {
             using (var connection = CreateConnection())
@@ -125,7 +127,37 @@ namespace SystemMonitor
                 }
             }
         }*/
+        public static void ClearLogs()
+        {
+            using (var connection = CreateConnection())
+            {
+                if (connection == null)
+                {
+                    return;
+                }
+                try
+                {
 
+                    // Barcha loglarni o'chirish
+                    using (var deleteCommand = new SQLiteCommand(@"DELETE FROM ""LogEntry""", connection))
+                    {
+                        deleteCommand.ExecuteNonQuery();
+                    }
+
+                    // Id ni 1 dan boshlash uchun SQLite jadvalini qayta sozlash
+                    using (var resetCommand = new SQLiteCommand(@"UPDATE sqlite_sequence SET seq = 0 WHERE name = 'LogEntry'", connection))
+                    {
+                        resetCommand.ExecuteNonQuery();
+                    }
+
+                    Console.WriteLine("Loglar muvaffaqiyatli o'chirildi va Id 1 dan boshlashga sozlandi.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Loglarni o'chirishda xato: {ex.Message}");
+                }
+            }
+        }
         public static void WriteLog(string module, string function, string message)
         {
             if (string.IsNullOrEmpty(module) || string.IsNullOrEmpty(function) || string.IsNullOrEmpty(message))
