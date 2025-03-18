@@ -21,56 +21,68 @@ namespace SystemMonitor
             LogWrapper.Execute(() =>
             {
                 StartMonitoring();
-                //socketManager = new SocketManager();
-                //_ = socketManager.StartSocketListener();
-                _ = GetAndSaveJwtToken();
-                
             }, "UI");
         }
 
-        public async Task GetAndSaveJwtToken()
+        private async void StartMonitoring()
         {
             await LogWrapper.ExecuteAsync(async () =>
             {
-                var token = await ApiClient.GetJwtTokenFromApi();
+                SQLiteHelper.CreateConnection();
+
+                var (token, statusCode) = await ApiClient.GetJwtTokenFromApi();
                 if (!string.IsNullOrEmpty(token))
                 {
                     SQLiteHelper.InsertJwtToken(token);
                     Console.WriteLine("JWT token saqlandi");
+
+                    if (statusCode == 200)
+                    {
+                        await SendProgramInfo();
+                        StartTimer(); 
+                    }
                 }
                 else
                 {
                     Console.WriteLine("JWT token olishda xatolik");
                 }
-            }, "API");
-        }
-
-        private void StartMonitoring()
-        {
-            LogWrapper.Execute(() =>
-            {
-                SendComputerInfo();
-                SendProgramInfo();
 
             }, "Monitoring");
         }
 
-        private void SendComputerInfo()
-        {
-            LogWrapper.Execute(() =>
-            {
-                var info = ComputerInfo.GetComputerInfo();
-                SQLiteHelper.CreateConnection();
-            }, "Monitoring");
-        }
-
-        private async void SendProgramInfo()
+        private async Task SendProgramInfo()
         {
             await LogWrapper.ExecuteAsync(async () =>
             {
                 var programs = ProgramManager.GetInstalledPrograms();
-                await ApiClient.SendProgramInfo(programs);
+                bool success = await ApiClient.SendProgramInfo(programs);
+
+                if (success)
+                {
+                    Console.WriteLine("Dasturlar ro‘yxati muvaffaqiyatli jo‘natildi.");
+                }
+                else
+                {
+                    Console.WriteLine("Dasturlar ro‘yxatini jo‘natishda xatolik yuz berdi.");
+                }
+
             }, "Monitoring");
+        }
+
+        private void StartTimer()
+        {
+            timer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMinutes(1) // ⏳ 1 daqiqada bir ishlaydi
+            };
+
+            timer.Tick += async (sender, args) =>
+            {
+                Console.WriteLine("🔄 1 daqiqa o‘tdi, yangi ma’lumot yuborilmoqda...");
+                await SendProgramInfo();
+            };
+
+            timer.Start();
         }
     }
 }

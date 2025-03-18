@@ -1,13 +1,28 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using System.Xml.Linq;
 
 namespace SystemMonitor.Models
 {
     public class ProgramDetails
     {
-        public string name { get; set; }
-        public string version { get; set; }
-        public DateTime? installed_date { get; set; }
-        public string type { get; set; }
-        public int? size { get; set; }
+        
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("version")]
+        public string Version { get; set; }
+
+        [JsonProperty("installed_date")]
+        public DateTime? InstalledDate { get; set; }
+
+        [JsonProperty("type")]
+        public string Type { get; set; }
+
+        [JsonProperty("size")]
+        public int? Size { get; set; }
+
     }
 }

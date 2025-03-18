@@ -15,53 +15,43 @@ namespace SystemMonitor
             Timeout = TimeSpan.FromSeconds(10)
         };
 
-        private const string BaseUrl = "http://13.51.199.15:4000/computers/create";
-        private const string BaseUrlForApps = "http://13.51.199.15:4000/computers/applications";
+            //private const string BaseUrl = "http://13.51.199.15:4000/agent/create";
+            private const string BaseUrl = "http://3.145.147.3:3004/agent/computer/register-or-update";
+            //private const string BaseUrlForApps = "http://13.51.199.15:4000/computers/applications";
+            private const string BaseUrlForApps = "http://3.145.147.3:3004/agent/application/register";
 
-        public static async Task<string> GetJwtTokenFromApi()
+        public static async Task<(string token, int statusCode)> GetJwtTokenFromApi()
         {
-            var computerInfo = ComputerInfo.GetComputerInfo(); 
-            var jsonContent = JsonConvert.SerializeObject(computerInfo); 
-            var content = new StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json"); 
+            var computerInfo = await ComputerInfo.GetComputerInfoAsync();
+            var jsonContent = JsonConvert.SerializeObject(computerInfo);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
             try
             {
                 var response = await client.PostAsync(BaseUrl, content);
+                int statusCode = (int)response.StatusCode;
 
                 if (response.IsSuccessStatusCode)
                 {
-                    var token = await response.Content.ReadAsStringAsync();
-                    return token;
+                    var responseBody = await response.Content.ReadAsStringAsync();
+                    var jsonResponse = JsonConvert.DeserializeObject<dynamic>(responseBody);
 
+                    string token = jsonResponse?.token;
+
+                    return (token, statusCode);
                 }
                 else
                 {
                     Console.WriteLine($"JWT olishda xatolik: {response.StatusCode}");
-                    return null;
+                    return (null, statusCode);
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"API ga so'rov yuborishda xatolik: {ex.Message}");
-                return null;
+                return (null, 500); // Xatolik bo‘lsa 500 qaytarish
             }
         }
-
-        /*public static async Task<string> GetJwtTokenFromApi()
-        {
-
-            var response = await client.PostAsync("http://13.51.199.15:4000/computers/create/authenticate", null);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var token = await response.Content.ReadAsStringAsync();
-                return token;
-            }
-
-            Console.WriteLine("JWT token olishda xatolik");
-            return null;
-        }*/
-
 
         private static async Task<bool> SendData<T>(string url, T data)
         {
@@ -77,7 +67,7 @@ namespace SystemMonitor
                         System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
                 }
 
-                HttpResponseMessage response = await client.PutAsync(url, content);
+                HttpResponseMessage response = await client.PostAsync(url, content);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -86,6 +76,7 @@ namespace SystemMonitor
 
                 Console.WriteLine($"[Xatolik]: {response.StatusCode} - {response.ReasonPhrase}");
             }
+            
             catch (HttpRequestException httpEx)
             {
                 Console.WriteLine($"[HTTP Xatolik]: {httpEx.Message}");
@@ -101,15 +92,12 @@ namespace SystemMonitor
 
             return false; // Agar xatolik bo'lsa false qaytariladi
         }
-
            
-
         public static async Task<bool> SendProgramInfo(List<ProgramDetails> programs)
         {
             return await SendData(BaseUrlForApps, programs);
         }
 
-        
         public static async Task<bool> SendCommandResult(string command, string result, string error)
         {
             var response = new { command, result, error };
