@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
@@ -36,15 +37,31 @@ namespace SystemMonitor
                     SQLiteHelper.InsertJwtToken(token);
                     Console.WriteLine("JWT token saqlandi");
 
-                    if (statusCode == 200)
+                    if (statusCode == 201)
                     {
                         await SendProgramInfo();
-                        StartTimer(); 
-                    }
+                    }            
                 }
                 else
                 {
                     Console.WriteLine("JWT token olishda xatolik");
+                }
+
+                if (SQLiteHelper.ShouldSendProgramInfo())
+                {
+                    await SendProgramInfo();
+                }
+
+                StartTimer();
+                socketManager = new SocketManager();
+                bool isConnected = await socketManager.StartSocketListener();
+                if (isConnected)
+                {
+                    Console.WriteLine("Socket.io tayyor!");
+                }
+                else
+                {
+                    Console.WriteLine("Socket.io ulanmadi, keyinroq qayta urinib ko‘ring.");
                 }
 
             }, "Monitoring");
@@ -60,6 +77,7 @@ namespace SystemMonitor
                 if (success)
                 {
                     Console.WriteLine("Dasturlar ro‘yxati muvaffaqiyatli jo‘natildi.");
+                    SQLiteHelper.UpdateLastSentTime(DateTime.UtcNow); 
                 }
                 else
                 {
@@ -73,16 +91,46 @@ namespace SystemMonitor
         {
             timer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromMinutes(1) // ⏳ 1 daqiqada bir ishlaydi
+                Interval = TimeSpan.FromHours(24) 
             };
 
             timer.Tick += async (sender, args) =>
             {
-                Console.WriteLine("🔄 1 daqiqa o‘tdi, yangi ma’lumot yuborilmoqda...");
+                Console.WriteLine("24 soat o‘tdi, yangi ma’lumot yuborilmoqda...");
+                if (!SQLiteHelper.ShouldSendProgramInfo())
+                {
+                    Console.WriteLine("24 soat o‘tmaganligi sababli dasturlar ro‘yxati jo‘natilmadi.");
+                    return;
+                }
+
                 await SendProgramInfo();
             };
 
             timer.Start();
         }
+        public static class LogHelper
+        {
+            private static readonly string logFilePath = "C:\\Users\\Muhammad\\Desktop\\log.txt";
+
+            public static void WriteLog(string message)
+            {
+                try
+                {
+                    string logMessage = $"{DateTime.Now}: {message}";
+
+                    if (!File.Exists(logFilePath))
+                    {
+                        File.Create(logFilePath).Close();
+                    }
+
+                    File.AppendAllText(logFilePath, logMessage + Environment.NewLine);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Log yozishda xatolik: {ex.Message}");
+                }
+            }
+        }
+
     }
 }

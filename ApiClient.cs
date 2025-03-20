@@ -15,10 +15,8 @@ namespace SystemMonitor
             Timeout = TimeSpan.FromSeconds(10)
         };
 
-            //private const string BaseUrl = "http://13.51.199.15:4000/agent/create";
-            private const string BaseUrl = "http://3.145.147.3:3004/agent/computer/register-or-update";
-            //private const string BaseUrlForApps = "http://13.51.199.15:4000/computers/applications";
-            private const string BaseUrlForApps = "http://3.145.147.3:3004/agent/application/register";
+        private static readonly string BaseUrl = ConfigurationManager.GetBaseUrl();
+        private static readonly string BaseUrlForApps = ConfigurationManager.GetBaseUrlForApps();
 
         public static async Task<(string token, int statusCode)> GetJwtTokenFromApi()
         {
@@ -49,7 +47,7 @@ namespace SystemMonitor
             catch (Exception ex)
             {
                 Console.WriteLine($"API ga so'rov yuborishda xatolik: {ex.Message}");
-                return (null, 500); // Xatolik bo‘lsa 500 qaytarish
+                return (null, 500);
             }
         }
 
@@ -63,7 +61,7 @@ namespace SystemMonitor
                 var token = await SQLiteHelper.GetJwtToken();
                 if (!string.IsNullOrEmpty(token))
                 {
-                    client.DefaultRequestHeaders.Authorization = new 
+                    client.DefaultRequestHeaders.Authorization = new
                         System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
                 }
 
@@ -71,12 +69,11 @@ namespace SystemMonitor
 
                 if (response.IsSuccessStatusCode)
                 {
-                    return true; 
+                    return true;
                 }
 
                 Console.WriteLine($"[Xatolik]: {response.StatusCode} - {response.ReasonPhrase}");
             }
-            
             catch (HttpRequestException httpEx)
             {
                 Console.WriteLine($"[HTTP Xatolik]: {httpEx.Message}");
@@ -90,9 +87,9 @@ namespace SystemMonitor
                 Console.WriteLine($"[Noma'lum xatolik]: {ex.Message}");
             }
 
-            return false; // Agar xatolik bo'lsa false qaytariladi
+            return false;
         }
-           
+
         public static async Task<bool> SendProgramInfo(List<ProgramDetails> programs)
         {
             return await SendData(BaseUrlForApps, programs);
