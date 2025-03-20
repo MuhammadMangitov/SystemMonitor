@@ -45,10 +45,8 @@ namespace SystemMonitor
                     Console.WriteLine($"Xatolik: {ex.Message}");
                 }
 
-                //ClearLogs();
             }
         }
-        
         public static void DeleteOldJwtToken()
         {
             using (var connection = CreateConnection())
@@ -69,7 +67,6 @@ namespace SystemMonitor
                 }
             }
         }
-
         public static async Task<string> GetJwtToken()
         {
             string token = null;
@@ -102,31 +99,6 @@ namespace SystemMonitor
 
             return token;
         }
-
-        /*public static void LogMessage(string message)
-        {
-            using (var connection = CreateConnection())
-            {
-                if (connection == null)
-                {
-                    return;
-                }
-
-                try
-                {
-                    using (var command1 = new SQLiteCommand("INSERT INTO LogEntry (message) VALUES (@message)", connection))
-                    {
-                        command1.Parameters.AddWithValue("@message", message);
-                        command1.Parameters.AddWithValue("@timestamp", DateTime.Now);
-                        command1.ExecuteNonQuery();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Xatolik: {ex.Message}");
-                }
-            }
-        }*/
         public static void ClearLogs()
         {
             using (var connection = CreateConnection())
@@ -192,5 +164,60 @@ namespace SystemMonitor
                 }
             }
         }
+        public static DateTime? GetLastSentTime()
+        {
+            using (var connection = CreateConnection())
+            {
+                if (connection == null) return null;
+
+                try
+                {
+                    using (var command = new SQLiteCommand("SELECT last_sent_time FROM Configurations LIMIT 1", connection))
+                    {
+                        var result = command.ExecuteScalar();
+                        if (result != null && DateTime.TryParse(result.ToString(), out DateTime lastSentTime))
+                        {
+                            return lastSentTime;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Xatolik: {ex.Message}");
+                }
+            }
+            return null;
+        }
+        public static void UpdateLastSentTime(DateTime dateTime)
+        {
+            using (var connection = CreateConnection())
+            {
+                if (connection == null) return;
+
+                try
+                {
+                    using (var command = new SQLiteCommand("UPDATE Configurations SET last_sent_time = @last_sent_time WHERE id = 1", connection))
+                    {
+                        command.Parameters.AddWithValue("@last_sent_time", dateTime.ToString("yyyy-MM-dd HH:mm:ss"));
+                        command.ExecuteNonQuery();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Xatolik: {ex.Message}");
+                }
+            }
+        }
+        public static bool ShouldSendProgramInfo()
+        {
+            DateTime? lastSentTime = GetLastSentTime();
+            if (lastSentTime == null)
+            {
+                return true; 
+            }
+
+            return (DateTime.UtcNow - lastSentTime.Value).TotalHours >= 24;
+        }
+
     }
 }
