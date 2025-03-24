@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Win32;
 using SocketIOClient;
@@ -34,84 +35,25 @@ namespace SystemMonitor
         {
             client.On("connect", async response =>
             {
-                Console.WriteLine("✅ Socket.io muvaffaqiyatli ulandi!");
-
+                Console.WriteLine("Socket.io muvaffaqiyatli ulandi!");
                 if (!isRegistered)
                 {
                     await client.EmitAsync("register", "SystemMonitor_Client");
                     isRegistered = true;
-                    Console.WriteLine("🔹 Client ro‘yxatga olindi.");
+                    Console.WriteLine("Client ro‘yxatga olindi.");
                 }
             });
 
-            client.On("delete_app", async response =>
+
+            client.On("command", async response =>
             {
-                try
-                {
-                    var parsedData = response.GetValue<Dictionary<string, object>>();
-                    if (parsedData.TryGetValue("name", out var nameObj))
-                    {
-                        string appName = nameObj.ToString();
-                        Console.WriteLine($"O‘chirish uchun qabul qilindi: {appName}");
+                Console.WriteLine($"Received command event: {response}");
 
-                        bool result = await UninstallApplicationAsync(appName);
-                        string status = result ? "success" : "error";
+                var commandData = response.GetValue<CommandData>();
 
-                        await client.EmitAsync("deleted_app", new { command = "delete_app", status, name = appName });
-                        Console.WriteLine($"O‘chirish natijasi: {status}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"❌ DELETE xatosi: {ex.Message}");
-                }
-            });
+                Console.WriteLine($"Command: {commandData.command}, App Name: {commandData.name}");
 
-            client.On("install_app", async response =>
-            {
-                try
-                {
-                    var parsedData = response.GetValue<Dictionary<string, object>>();
-                    if (!parsedData.TryGetValue("name", out var filenameObj)) return;
-
-                    string filename = filenameObj.ToString();
-                    Console.WriteLine($"Yuklab olish uchun qabul qilindi: {filename}");
-
-                    string jwtToken = await SQLiteHelper.GetJwtToken();
-                    if (string.IsNullOrEmpty(jwtToken))
-                    {
-                        Console.WriteLine("Token topilmadi!");
-                        await client.EmitAsync("downloaded_app", new { command = "download_app", status = "error", filename });
-                        return;
-                    }
-
-                    string apiUrl = ConfigurationManager.GetInstallerApiUrl();
-                    string requestUrl = $"{apiUrl}/{filename}";
-                    string savePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), $"{filename}.exe");
-
-                    bool downloaded = await DownloadFileAsync(requestUrl, savePath, jwtToken);
-                    string status = downloaded ? "success" : "error";
-
-                    await client.EmitAsync("downloaded_app", new { command = "download_app", status, filename });
-                    Console.WriteLine($"{filename} yuklab olish natijasi: {status}");
-
-                    if (!downloaded)
-                    {
-                        Console.WriteLine("Yuklab olish muvaffaqiyatsiz tugadi!");
-                        return;
-                    }
-
-                    Console.WriteLine($"O‘rnatish boshlanmoqda: {savePath}");
-                    bool installed = await InstallApplicationAsync(savePath);
-
-                    string installStatus = installed ? "installed" : "install_failed";
-                    await client.EmitAsync("installed_app", new { command = "install_app", status = installStatus, filename });
-                    Console.WriteLine($"{filename} o‘rnatish natijasi: {installStatus}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"INSTALL xatosi: {ex.Message}");
-                }
+                await HandleAppCommand(commandData);
             });
 
         }
@@ -121,7 +63,7 @@ namespace SystemMonitor
             string jwtToken = await SQLiteHelper.GetJwtToken();
             if (string.IsNullOrEmpty(jwtToken))
             {
-                Console.WriteLine("❌ Token topilmadi!");
+                Console.WriteLine("Token topilmadi!");
                 return false;
             }
 
@@ -130,34 +72,139 @@ namespace SystemMonitor
             return client.Connected;
         }
 
-        private async Task<bool> UninstallApplicationAsync(string appName)
+        private async Task HandleAppCommand(CommandData data) 
         {
             try
             {
-                string uninstallString = GetUninstallString(appName);
-                if (string.IsNullOrEmpty(uninstallString)) return false;
-
-                ProcessStartInfo psi = new ProcessStartInfo
+                if (data == null || string.IsNullOrEmpty(data.command))
                 {
-                    FileName = "cmd.exe",
-                    Arguments = $"/C \"{uninstallString} /quiet /norestart\"",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
+                    Console.WriteLine("Bo‘sh yoki noto‘g‘ri command!");
+                    return;
+                }
 
-                return await Task.Run(() =>
+                string command = data.command.ToLower();
+                string appName = data.name ?? "";
+
+                bool success = false;
+
+                switch (command)
                 {
-                    using (Process process = Process.Start(psi))
-                    {
-                        process.WaitForExit();
-                        return process.ExitCode == 0;
-                    }
-                });
+                    case "delete_app":
+                        success = await UninstallApplicationAsync(appName);
+                        break;
+                    case "install_app":
+                    case "update_app":
+                        success = await DownloadAndInstallApp(appName, command);
+                        break;
+                    default:
+                        Console.WriteLine($"Noma'lum command: {command}");
+                        return;
+                }
+
+                await EmitResponseAsync(command, success, appName);
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Xatolik: {ex.Message}");
+            }
+        }
+
+        private async Task<bool> DownloadAndInstallApp(string appName, string command)
+        {
+            try
+            {
+                string jwtToken = await SQLiteHelper.GetJwtToken();
+                if (string.IsNullOrEmpty(jwtToken)) return false;
+
+                string apiUrl = ConfigurationManager.GetInstallerApiUrl();
+                string requestUrl = $"{apiUrl}/{appName}";
+                string savePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), $"{appName}.exe");
+
+                bool downloaded = await DownloadFileAsync(requestUrl, savePath, jwtToken);
+                if (downloaded && (command != "update_app" || CloseApplication(appName)))
+                {
+                    return await InstallApplicationAsync(savePath);
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"{command.ToUpper()} xatosi: {ex.Message}");
+                return false;
+            }
+        }
+
+        private async Task<bool> UninstallApplicationAsync(string appName)
+        {
+            string uninstallString = GetUninstallString(appName);
+            if (string.IsNullOrEmpty(uninstallString)) return false;
+
+            return await RunProcessAsync("cmd.exe", $"/C \"{uninstallString} /quiet /norestart\"");
+        }
+
+        private async Task<bool> InstallApplicationAsync(string installerPath)
+        {
+            return await RunProcessAsync(installerPath, "/silent /verysilent /norestart");
+        }
+
+        private async Task<bool> RunProcessAsync(string fileName, string arguments)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
+                UseShellExecute = true,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+
+            using (var process = new Process { StartInfo = psi })
+            {
+                process.Start();
+                await Task.Run(() => process.WaitForExit());
+                return process.ExitCode == 0;
+            }
+        }
+
+        private async Task<bool> DownloadFileAsync(string url, string savePath, string jwtToken)
+        {
+            try
+            {
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwtToken);
+                var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                if (!response.IsSuccessStatusCode) return false;
+
+                using (var stream = await response.Content.ReadAsStreamAsync())
+                using (var fileStream = new FileStream(savePath, FileMode.Create))
+                {
+                    await stream.CopyToAsync(fileStream);
+                }
+
+                return File.Exists(savePath);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Download xatosi: {ex.Message}");
+                return false;
+            }
+        }
+
+        private bool CloseApplication(string appName)
+        {
+            try
+            {
+                foreach (var process in Process.GetProcessesByName(appName))
+                {
+                    process.Kill();
+                    process.WaitForExit();
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Dastur yopishda xatolik: {ex.Message}");
                 return false;
             }
         }
@@ -166,8 +213,8 @@ namespace SystemMonitor
         {
             string[] registryPaths =
             {
-            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-            @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
             };
 
             foreach (string path in registryPaths)
@@ -176,90 +223,27 @@ namespace SystemMonitor
                 {
                     if (key == null) continue;
 
-                    foreach (var subKeyName in key.GetSubKeyNames())
+                    foreach (string subKeyName in key.GetSubKeyNames())
                     {
                         using (RegistryKey subKey = key.OpenSubKey(subKeyName))
                         {
-                            if (subKey?.GetValue("DisplayName")?.ToString() == appName)
-                                return subKey.GetValue("UninstallString")?.ToString();
+                            string displayName = subKey?.GetValue("DisplayName")?.ToString();
+                            string uninstallString = subKey?.GetValue("UninstallString")?.ToString();
+
+                            if (!string.IsNullOrEmpty(displayName) && displayName.IndexOf(appName, StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                return uninstallString;
+                            }
                         }
                     }
                 }
             }
-
-            string userRegistryPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
-            using (RegistryKey userKey = Registry.CurrentUser.OpenSubKey(userRegistryPath))
-            {
-                if (userKey != null)
-                {
-                    foreach (var subKeyName in userKey.GetSubKeyNames())
-                    {
-                        using (RegistryKey subKey = userKey.OpenSubKey(subKeyName))
-                        {
-                            if (subKey?.GetValue("DisplayName")?.ToString() == appName)
-                                return subKey.GetValue("UninstallString")?.ToString();
-                        }
-                    }
-                }
-            }
-
-            return null; 
+            return null;
         }
 
-
-        private async Task<bool> DownloadFileAsync(string url, string savePath, string jwtToken)
+        private async Task EmitResponseAsync(string command, bool success, string appName)
         {
-            try
-            {
-                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwtToken);
-
-                using (HttpResponseMessage response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
-                {
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        Console.WriteLine("❌ Serverdan fayl yuklab olishda xatolik!");
-                        return false;
-                    }
-
-                    using (Stream stream = await response.Content.ReadAsStreamAsync())
-                    using (FileStream fileStream = new FileStream(savePath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true))
-                    {
-                        await stream.CopyToAsync(fileStream);
-                    }
-
-                    return File.Exists(savePath);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Yuklab olishda xatolik: {ex.Message}");
-                return false;
-            }
-        }
-
-        private async Task<bool> InstallApplicationAsync(string installerPath)
-        {
-            try
-            {
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = installerPath,
-                    Arguments = "/silent /verysilent /norestart",
-                    UseShellExecute = true, // 🔹 Windows shell orqali ishga tushirish
-                    Verb = "runas" // 🔹 Administrator sifatida ishga tushirish
-                };
-
-                using (Process process = Process.Start(psi))
-                {
-                    await Task.Run(() => process.WaitForExit());
-                    return process.ExitCode == 0;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ O‘rnatish xatosi: {ex.Message}");
-                return false;
-            }
+            await client.EmitAsync("response", new { command, status = success ? "success" : "error", name = appName });
         }
 
     }
