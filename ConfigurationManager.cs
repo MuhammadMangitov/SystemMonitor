@@ -48,5 +48,6 @@ namespace SystemMonitor
         public static string GetDbPath() => Configuration["DatabaseSettings:DbPath"];
         public static string GetSocketServerUrl() => Configuration["SocketSettings:ServerUrl"];
         public static string GetInstallerApiUrl() => Configuration["SocketSettings:InstallerApiUrl"];
+        public static string GetUpdateApiUrl() => Configuration["SocketSettings:UpdateApiUrl"];
     }
 }

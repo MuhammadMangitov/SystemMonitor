@@ -154,6 +154,7 @@
     <Compile Include="ConfigurationManager.cs" />
     <Compile Include="LogWrapper.cs" />
     <Compile Include="Models\AdapterDetails.cs" />
+    <Compile Include="Models\CommandData.cs" />
     <Compile Include="Models\ComputerInfoDetails.cs" />
     <Compile Include="Models\DiskDetails.cs" />
     <Compile Include="Models\ProgramDetails.cs" />
